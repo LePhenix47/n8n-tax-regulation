@@ -1,15 +1,15 @@
 /**
- * Task 3 — Puppeteer script: Login + Update Taux Neutre
+ * Task 3 — Puppeteer script: Login + Update Revenus
  *
- * Run: bun scripts/update-tax-rate.ts <newRate>
- * e.g. bun scripts/update-tax-rate.ts 0.099
+ * Run: bun scripts/update-tax-rate.ts <annualRevenue>
+ * e.g. bun scripts/update-tax-rate.ts 42000
  *
  * Reads credentials from .env:
  *   IMPOTS_LOGIN=<13-digit fiscal number>
  *   IMPOTS_PASSWORD=<password>
  *
- *
- * bun "C:\fakePath\tax-automation\scripts\update-tax-rate.ts" {{ $json.currentRate }}
+ * n8n Execute Command node:
+ * bun "C:\fakePath\tax-automation\scripts\update-tax-rate.ts" {{ $json.annualRevenue }}
  */
 
 import puppeteer, { type Page } from "puppeteer";
@@ -20,72 +20,65 @@ const PASSWORD = process.env.IMPOTS_PASSWORD;
 const TARGET_URL = "https://cfspart.impots.gouv.fr/tremisu/saisie-revenus.html";
 const LOGIN_URL = "https://cfspart.impots.gouv.fr/";
 
-const newRate = parseFloat(process.argv[2]);
+const annualRevenue = parseInt(process.argv[2], 10);
 
 if (!LOGIN || !PASSWORD) {
   throw new Error("Missing IMPOTS_LOGIN or IMPOTS_PASSWORD in .env");
 }
 
-if (isNaN(newRate)) {
-  throw new Error("Usage: bun update-tax-rate.ts <rate> (e.g. 0.099)");
+if (isNaN(annualRevenue)) {
+  throw new Error("Usage: bun update-tax-rate.ts <annualRevenue> (e.g. 42000)");
 }
 
 async function login(page: Page): Promise<void> {
   await page.goto(LOGIN_URL, { waitUntil: "networkidle2" });
-  console.log('Login page:', page.url());
+  console.log("Login page:", page.url());
 
-  await page.waitForSelector('#spi_tmp');
-  await page.type('#spi_tmp', LOGIN!);
-  console.log('Typed login, looking for Continuer button...');
+  await page.waitForSelector("#spi_tmp");
+  await page.type("#spi_tmp", LOGIN!);
+  console.log("Typed login, looking for Continuer button...");
 
-  const buttons = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('button')).map(b => ({
-      text: b.textContent?.trim(),
-      id: b.id,
-      type: b.type,
-      disabled: b.disabled,
-    }))
-  );
-  console.log('Buttons found:', JSON.stringify(buttons, null, 2));
+  await page.click("#btnAction");
+  console.log("Clicked Continuer");
 
-  await page.click('#btnAction');
-  console.log('Clicked Continuer');
+  await page.waitForSelector("#pwd_tmp", { visible: true });
+  console.log("Password field visible");
+  await page.type("#pwd_tmp", PASSWORD!);
+  await page.click("#btnAction");
+  console.log("Clicked Se connecter");
 
-  await page.waitForSelector('#pwd_tmp', { visible: true });
-  console.log('Password field visible');
-  await page.type('#pwd_tmp', PASSWORD!);
-  await page.click('#btnAction');
-  console.log('Clicked Se connecter');
-
-  await page.waitForNavigation({ waitUntil: 'networkidle2' });
-  console.log('Logged in. Current URL:', page.url());
+  // Wait for manual 2FA code entry — no timeout
+  console.log("Waiting for 2FA / security code to be entered manually...");
+  await page.waitForNavigation({ waitUntil: "networkidle2", timeout: 0 });
+  console.log("Logged in. Current URL:", page.url());
 }
 
-async function updateRate(page: Page, _rate: number): Promise<void> {
+async function updateRate(page: Page, revenue: number): Promise<void> {
   await page.goto(TARGET_URL, { waitUntil: "networkidle2" });
   console.log("On target page:", page.url());
 
-  // TODO: click the button under "Votre taux personnalisé est actuellement de"
-  // await page.click('TODO_MODIFY_RATE_BUTTON_SELECTOR');
+  await page.waitForSelector('#menu-taux-btn', { visible: true });
+  await page.click('#menu-taux-btn');
 
-  // TODO: fill in the form fields (income, etc.)
-  // await page.type('TODO_INCOME_FIELD_SELECTOR', String(/* income */));
+  await page.waitForSelector('#submit-btn-saisiesitfam', { visible: true });
+  await page.click('#submit-btn-saisiesitfam');
 
-  // TODO: submit
-  // await page.click('TODO_SUBMIT_BUTTON_SELECTOR');
+  await page.waitForSelector('#code1AJ', { visible: true });
+  await page.type('#code1AJ', String(revenue));
 
-  console.log("Rate update submitted.");
+  await page.click('#validerDeclarationBoutton');
+  console.log('Submitted revenue:', revenue);
 }
 
 const browser = await puppeteer.launch({ headless: false });
 const page = await browser.newPage();
-page.on('console', msg => console.log('[browser]', msg.text()));
+page.on("console", (msg) => console.log("[browser]", msg.text()));
 
 try {
   await login(page);
-  await updateRate(page, newRate);
+  await updateRate(page, annualRevenue);
 } catch (err) {
   console.error("Error:", (err as Error).message);
 } finally {
-  await browser.close();
+  // await browser.close();
 }
