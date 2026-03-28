@@ -5,7 +5,19 @@
       "Bash(npx n8n:*)",
       "Bash(npm install:*)",
       "WebFetch(domain:pptr.dev)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(N8N_BLOCK_ENV_ACCESS_IN_NODE=false npm run start:n8n)",
+      "Bash(taskkill /F /IM node.exe)",
+      "Bash(N8N_BLOCK_ENV_ACCESS_IN_NODE=false N8N_RESTRICT_FILE_ACCESS_TO=\"\" EXECUTIONS_PROCESS=main npm run start:n8n)",
+      "Bash(n8n --help)",
+      "WebFetch(domain:docs.n8n.io)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /F /PID 21700)",
+      "Bash(taskkill /PID 21700 /F)",
+      "Bash(cmd.exe /c \"taskkill /PID 21700 /F\")",
+      "Bash(kill -9 21700)",
+      "Bash(taskkill //PID 21700 //F)",
+      "Bash(NODES_EXCLUDE=\"[]\" npm run start:n8n)"
     ]
   }
 }
