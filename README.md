@@ -57,8 +57,10 @@ Build the following nodes in order:
 
 ### Execute Command node
 
+Set `SCRIPT_PATH` in your `.env` to the absolute path of `update-tax-rate.ts`, then use:
+
 ```
-bun "C:\Users\lolle\Desktop\Web dev\Projets personnels\tax-automation\scripts\update-tax-rate.ts" {{ $json.netImposable * 12 }}
+bun "%SCRIPT_PATH%" {{ $json.netImposable * 12 }}
 ```
 
 > The script expects **annual** revenue. Task 2 outputs monthly (`netImposable`), so multiply by 12.
