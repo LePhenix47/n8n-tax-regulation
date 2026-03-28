@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(n8n --version)",
+      "Bash(npx n8n:*)"
+    ]
+  }
+}
