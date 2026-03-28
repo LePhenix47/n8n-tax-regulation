@@ -95,6 +95,19 @@
       ],
       "id": "830c3862-0de3-4d4a-90c8-e681fc7ddea7",
       "name": "Net imposable"
+    },
+    {
+      "parameters": {
+        "command": "=bun \"C:\\Users\\lolle\\Desktop\\Web dev\\Projets personnels\\tax-automation\\scripts\\update-tax-rate.ts\" {{ $json.netImposable * 12 }}\n"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1008,
+        -96
+      ],
+      "id": "224557c0-4f59-45cc-b3d1-f68fab4148ad",
+      "name": "Execute Command"
     }
   ],
   "pinData": {},
@@ -145,7 +158,13 @@
     },
     "If": {
       "main": [
-        []
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -155,7 +174,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "c38343b1-9ac8-4149-8180-28c95766af20",
+  "versionId": "64798e0e-65dd-406a-8eb4-f9448ffb05ac",
   "meta": {
     "instanceId": "3da45d935305363c69b0b58031db83a74859b55142b9080d4cb236f6969874a3"
   },
