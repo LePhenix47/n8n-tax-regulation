@@ -1,0 +1,164 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "1efd1c68-d244-4490-bbf0-a4c35a4951dc",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Task 1 — n8n Code Node: Tax Grid Scraper\n *\n * Paste this into an n8n \"Code\" node (mode: \"Run Once for All Items\").\n * No external npm packages needed — uses only Node built-ins.\n *\n * Output:\n *   items[0].json.taxGrid — Array<{ min, max, rate }>\n *\n * https://docs.n8n.io\n */\n\n/* -------------------------------------------------------------------------- */\n/*  Helpers (copied from scrape-tax-grid.js for self-contained n8n use)       */\n/* -------------------------------------------------------------------------- */\n\nasync function fetchHtml(url) {\n  return helpers.httpRequest({\n    method: \"GET\",\n    url,\n    headers: { \"User-Agent\": \"Mozilla/5.0\" },\n    returnFullResponse: false,\n  });\n}\n\nfunction parseFrenchNumber(raw) {\n  if (!raw) return null;\n  const cleaned = raw\n    .replace(/\\u00A0/g, \"\")\n    .replace(/\\s/g, \"\")\n    .replace(\",\", \".\")\n    .replace(\"%\", \"\")\n    .trim();\n  const value = parseFloat(cleaned);\n  return isNaN(value) ? null : value;\n}\n\nfunction stripTags(html) {\n  return html\n    .replace(/<[^>]+>/g, \" \")\n    .replace(/&nbsp;/g, \"\\u00A0\")\n    .replace(/&amp;/g, \"&\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction extractTableRows(html) {\n  const sectionMarker =\n    /Grille des taux par d.{1,10}faut applicables aux contribuables domicili.{1,5}s en m.{1,5}tropole/i;\n  const markerIndex = html.search(sectionMarker);\n  if (markerIndex === -1)\n    throw new Error(\n      \"Target section not found — page structure may have changed.\",\n    );\n  const relevantHtml = html.slice(markerIndex);\n  const tableMatch = relevantHtml.match(/<table[\\s\\S]*?<\\/table>/i);\n  if (!tableMatch) throw new Error(\"No table found after target section.\");\n  return [...tableMatch[0].matchAll(/<tr[\\s\\S]*?<\\/tr>/gi)].map((m) => m[0]);\n}\n\nfunction parseRangeText(text) {\n  const parseAmt = (s) => parseFloat(s.replace(/[\\s\\u00A0]/g, '').replace(',', '.'));\n  const supMatch = text.match(/sup.{1,10}rieure\\s+ou\\s+.{1,5}gale\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  const infMatch = text.match(/inf.{1,5}rieure\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  return {\n    min: supMatch ? parseAmt(supMatch[1]) : 0,\n    max: infMatch ? parseAmt(infMatch[1]) : null,\n  };\n}\n\nfunction parseRows(rows) {\n  const grid = [];\n  for (const rowHtml of rows) {\n    const cellMatches = [...rowHtml.matchAll(/<t[dh][\\s\\S]*?<\\/t[dh]>/gi)];\n    if (cellMatches.length < 2) continue;\n    const cells = cellMatches.map((m) => stripTags(m[0]));\n    const rate = parseFrenchNumber(cells[1]);\n    if (rate === null) continue;\n    const { min, max } = parseRangeText(cells[0]);\n    grid.push({ min, max, rate: rate / 100 });\n  }\n  return grid;\n}\n\n/* -------------------------------------------------------------------------- */\n/*  Main                                                                       */\n/* -------------------------------------------------------------------------- */\n\nconst BOFIP_URL =\n  \"https://bofip.impots.gouv.fr/bofip/11255-PGP.html/identifiant%3DBOI-BAREME-000037-20250410\";\n\nconst html = await fetchHtml(BOFIP_URL);\nconsole.log(\"HTML length:\", html.length);\nconsole.log(\"HTML snippet (first 500):\", html.slice(0, 500));\n\nconst rows = extractTableRows(html);\nconsole.log(\"Row count:\", rows.length);\nrows.forEach((r, i) => console.log(`Row ${i}:`, r));\n\nconst taxGrid = parseRows(rows);\nconsole.log(\"Parsed grid:\", JSON.stringify(taxGrid));\n\nif (taxGrid.length === 0) {\n  throw new Error(\"Parsed tax grid is empty — check BOFIP page structure.\");\n}\n\nreturn [{ json: { taxGrid, scrapedAt: new Date().toISOString() } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "b8cc3431-e04d-4863-ac1a-56623f46d151",
+      "name": "Tax Web scraper"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Task 2 — n8n Code Node: Rate Comparator with Static State\n *\n * Paste this entire block into an n8n \"Code\" node (mode: \"Run Once for All Items\").\n *\n * Expected input items:\n *   items[0].json.netImposable  — number (monthly net imposable from PDF)\n *   items[0].json.taxGrid       — array from Task 1 scraper\n *                                 [{ min, max, rate }, ...]\n *\n * Workflow static data key: \"lastAppliedRate\"\n * Persists the last rate applied to impots.gouv.fr so we only trigger\n * the Playwright update when the bracket actually changes.\n */\n\n/* -------------------------------------------------------------------------- */\n/*  1. Read inputs                                                             */\n/* -------------------------------------------------------------------------- */\n\nconst { netImposable, taxGrid } = items[0].json;\n\nif (typeof netImposable !== 'number' || !Array.isArray(taxGrid)) {\n  throw new Error(\n    `Invalid input. Expected netImposable: number, taxGrid: array. Got: ${JSON.stringify({ netImposable, taxGrid })}`\n  );\n}\n\n/* -------------------------------------------------------------------------- */\n/*  2. Load persisted state                                                    */\n/* -------------------------------------------------------------------------- */\n\n/*\n * getWorkflowStaticData('global') persists across workflow executions.\n * It survives workflow re-saves and process restarts (stored in n8n DB).\n * Mutating the returned object automatically persists on node completion.\n */\nconst staticData = $getWorkflowStaticData('global');\n\nconst lastAppliedRate = staticData.lastAppliedRate ?? null;\n\n/* -------------------------------------------------------------------------- */\n/*  3. Find the matching bracket                                               */\n/* -------------------------------------------------------------------------- */\n\n/**\n * Finds the tax bracket for a given monthly income.\n * Brackets are half-open intervals: [min, max)\n * The last bracket has max === null (open-ended).\n */\nfunction findBracket(income, grid) {\n  for (const bracket of grid) {\n    const withinMin = income >= bracket.min;\n    const withinMax = bracket.max === null || income < bracket.max;\n\n    if (withinMin && withinMax) {\n      return bracket;\n    }\n  }\n  return null;\n}\n\nconst matchedBracket = findBracket(netImposable, taxGrid);\n\nif (!matchedBracket) {\n  throw new Error(\n    `No bracket found for netImposable=${netImposable}. ` +\n    `Grid range: ${taxGrid[0]?.min} – ${taxGrid[taxGrid.length - 1]?.max ?? '∞'}`\n  );\n}\n\nconst currentRate = matchedBracket.rate;\n\n/* -------------------------------------------------------------------------- */\n/*  4. Compare and decide                                                      */\n/* -------------------------------------------------------------------------- */\n\nconst changeDetected = currentRate !== lastAppliedRate;\n\n/* -------------------------------------------------------------------------- */\n/*  5. Persist new rate if changed                                             */\n/* -------------------------------------------------------------------------- */\n\nif (changeDetected) {\n  staticData.lastAppliedRate = currentRate;\n}\n\n/* -------------------------------------------------------------------------- */\n/*  6. Return result to next node                                              */\n/* -------------------------------------------------------------------------- */\n\n/*\n * Downstream routing:\n *   IF node on changeDetected === true  → trigger Playwright script\n *   IF node on changeDetected === false → stop / notify \"no change\"\n */\nreturn [\n  {\n    json: {\n      changeDetected,\n      currentRate,\n      currentRatePercent: `${(currentRate * 100).toFixed(1)}%`,\n      oldRate: lastAppliedRate,\n      oldRatePercent: lastAppliedRate !== null ? `${(lastAppliedRate * 100).toFixed(1)}%` : null,\n      netImposable,\n      matchedBracket: {\n        min: matchedBracket.min,\n        max: matchedBracket.max,\n        rate: matchedBracket.rate,\n      },\n      timestamp: new Date().toISOString(),\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "6e2da11e-31b4-4b31-b269-e2354161528d",
+      "name": "Rate comparator"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "baf174cb-7829-4e7d-a9ff-775839b00c4b",
+              "leftValue": "={{ $json.changeDetected }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        800,
+        0
+      ],
+      "id": "4db58f04-a3d1-43f3-ac79-911348b935a1",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7023aed4-ca2d-4fc1-a822-8130d6d8edc7",
+              "name": "netImposable",
+              "value": 3500,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        0
+      ],
+      "id": "830c3862-0de3-4d4a-90c8-e681fc7ddea7",
+      "name": "Net imposable"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Tax Web scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tax Web scraper": {
+      "main": [
+        [
+          {
+            "node": "Net imposable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rate comparator": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Net imposable": {
+      "main": [
+        [
+          {
+            "node": "Rate comparator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "c38343b1-9ac8-4149-8180-28c95766af20",
+  "meta": {
+    "instanceId": "3da45d935305363c69b0b58031db83a74859b55142b9080d4cb236f6969874a3"
+  },
+  "id": "er0qo3e3zw04K9kk",
+  "tags": []
+}
