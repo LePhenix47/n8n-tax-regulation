@@ -8,6 +8,6 @@
     "start:n8n": "n8n start"
   },
   "dependencies": {
-    "puppeteer": "^23.0.0"
+    "puppeteer": "^24.15.0"
   }
 }
