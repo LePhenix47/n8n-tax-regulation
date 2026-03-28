@@ -16,6 +16,7 @@ import puppeteer, { type Page } from "puppeteer";
 
 const LOGIN = process.env.IMPOTS_LOGIN;
 const PASSWORD = process.env.IMPOTS_PASSWORD;
+
 const TARGET_URL = "https://cfspart.impots.gouv.fr/tremisu/saisie-revenus.html";
 const LOGIN_URL = "https://cfspart.impots.gouv.fr/";
 
@@ -24,6 +25,7 @@ const newRate = parseFloat(process.argv[2]);
 if (!LOGIN || !PASSWORD) {
   throw new Error("Missing IMPOTS_LOGIN or IMPOTS_PASSWORD in .env");
 }
+
 if (isNaN(newRate)) {
   throw new Error("Usage: bun update-tax-rate.ts <rate> (e.g. 0.099)");
 }
@@ -31,20 +33,17 @@ if (isNaN(newRate)) {
 async function login(page: Page): Promise<void> {
   await page.goto(LOGIN_URL, { waitUntil: "networkidle2" });
 
-  // TODO: click login button on homepage if needed to reach the OAuth page
-  // await page.click('TODO_LOGIN_BUTTON_SELECTOR');
+  // Click the login button on the homepage to trigger the OAuth redirect
+  await page.locator("::-p-text(Accéder à votre espace)").click();
+  await page.waitForNavigation({ waitUntil: "networkidle2" });
 
-  // Wait for the fiscal number field
-  await page.waitForSelector("TODO_FISCAL_NUMBER_INPUT_SELECTOR");
-  await page.type("TODO_FISCAL_NUMBER_INPUT_SELECTOR", LOGIN!);
+  // Fill fiscal number — TODO: verify selector with DevTools if this fails
+  await page.waitForSelector('input[name="spi"]');
+  await page.type('input[name="spi"]', LOGIN!);
 
-  // TODO: click "Continuer" if it's a first step before password appears
-  // await page.click('TODO_CONTINUER_BUTTON_SELECTOR');
-  // await page.waitForSelector('TODO_PASSWORD_INPUT_SELECTOR');
+  await page.type('input[type="password"]', PASSWORD!);
 
-  await page.type("TODO_PASSWORD_INPUT_SELECTOR", PASSWORD!);
-  await page.click("TODO_SE_CONNECTER_BUTTON_SELECTOR");
-
+  await page.locator("::-p-text(Se connecter)").click();
   await page.waitForNavigation({ waitUntil: "networkidle2" });
   console.log("Logged in. Current URL:", page.url());
 }
