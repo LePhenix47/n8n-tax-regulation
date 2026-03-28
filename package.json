@@ -5,10 +5,9 @@
   "type": "commonjs",
   "scripts": {
     "test:scraper": "node scripts/scrape-tax-grid.js",
-    "start:n8n": "n8n start",
-    "install:playwright": "npm install playwright && npx playwright install chromium"
+    "start:n8n": "n8n start"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "puppeteer": "^23.0.0"
   }
 }
