@@ -32,14 +32,11 @@ if (isNaN(newRate)) {
 
 async function login(page: Page): Promise<void> {
   await page.goto(LOGIN_URL, { waitUntil: "networkidle2" });
+  console.log('Login page:', page.url());
 
-  // Click the login button on the homepage to trigger the OAuth redirect
-  await page.locator("::-p-text(Accéder à votre espace)").click();
-  await page.waitForNavigation({ waitUntil: "networkidle2" });
-
-  // Fill fiscal number — TODO: verify selector with DevTools if this fails
-  await page.waitForSelector('input[name="spi"]');
-  await page.type('input[name="spi"]', LOGIN!);
+  await page.waitForSelector('#spi_tmp');
+  console.log('Found #spi_tmp');
+  await page.type('#spi_tmp', LOGIN!);
 
   await page.type('input[type="password"]', PASSWORD!);
 
@@ -66,6 +63,7 @@ async function updateRate(page: Page, _rate: number): Promise<void> {
 
 const browser = await puppeteer.launch({ headless: false });
 const page = await browser.newPage();
+page.on('console', msg => console.log('[browser]', msg.text()));
 
 try {
   await login(page);
