@@ -3,7 +3,9 @@
     "allow": [
       "Bash(n8n --version)",
       "Bash(npx n8n:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:pptr.dev)",
+      "WebSearch"
     ]
   }
 }

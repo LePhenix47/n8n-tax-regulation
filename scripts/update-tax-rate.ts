@@ -35,14 +35,30 @@ async function login(page: Page): Promise<void> {
   console.log('Login page:', page.url());
 
   await page.waitForSelector('#spi_tmp');
-  console.log('Found #spi_tmp');
   await page.type('#spi_tmp', LOGIN!);
+  console.log('Typed login, looking for Continuer button...');
 
-  await page.type('input[type="password"]', PASSWORD!);
+  const buttons = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('button')).map(b => ({
+      text: b.textContent?.trim(),
+      id: b.id,
+      type: b.type,
+      disabled: b.disabled,
+    }))
+  );
+  console.log('Buttons found:', JSON.stringify(buttons, null, 2));
 
-  await page.locator("::-p-text(Se connecter)").click();
-  await page.waitForNavigation({ waitUntil: "networkidle2" });
-  console.log("Logged in. Current URL:", page.url());
+  await page.click('#btnAction');
+  console.log('Clicked Continuer');
+
+  await page.waitForSelector('#pwd_tmp', { visible: true });
+  console.log('Password field visible');
+  await page.type('#pwd_tmp', PASSWORD!);
+  await page.click('#btnAction');
+  console.log('Clicked Se connecter');
+
+  await page.waitForNavigation({ waitUntil: 'networkidle2' });
+  console.log('Logged in. Current URL:', page.url());
 }
 
 async function updateRate(page: Page, _rate: number): Promise<void> {
