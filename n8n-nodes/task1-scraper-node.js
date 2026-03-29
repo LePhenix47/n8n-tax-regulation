@@ -97,4 +97,5 @@ if (taxGrid.length === 0) {
   throw new Error("Parsed tax grid is empty — check BOFIP page structure.");
 }
 
-return [{ json: { taxGrid, scrapedAt: new Date().toISOString() } }];
+const netImposable = items[0].json.netImposable ?? null;
+return [{ json: { taxGrid, scrapedAt: new Date().toISOString(), netImposable } }];
