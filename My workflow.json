@@ -3,13 +3,13 @@
   "nodes": [
     {
       "parameters": {
-        "jsCode": "/**\n * Task 1 — n8n Code Node: Tax Grid Scraper\n *\n * Paste this into an n8n \"Code\" node (mode: \"Run Once for All Items\").\n * No external npm packages needed — uses only Node built-ins.\n *\n * Output:\n *   items[0].json.taxGrid — Array<{ min, max, rate }>\n *\n * https://docs.n8n.io\n */\n\n/* -------------------------------------------------------------------------- */\n/*  Helpers (copied from scrape-tax-grid.js for self-contained n8n use)       */\n/* -------------------------------------------------------------------------- */\n\nasync function fetchHtml(url) {\n  return helpers.httpRequest({\n    method: \"GET\",\n    url,\n    headers: { \"User-Agent\": \"Mozilla/5.0\" },\n    returnFullResponse: false,\n  });\n}\n\nfunction parseFrenchNumber(raw) {\n  if (!raw) return null;\n  const cleaned = raw\n    .replace(/\\u00A0/g, \"\")\n    .replace(/\\s/g, \"\")\n    .replace(\",\", \".\")\n    .replace(\"%\", \"\")\n    .trim();\n  const value = parseFloat(cleaned);\n  return isNaN(value) ? null : value;\n}\n\nfunction stripTags(html) {\n  return html\n    .replace(/<[^>]+>/g, \" \")\n    .replace(/&nbsp;/g, \"\\u00A0\")\n    .replace(/&amp;/g, \"&\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction extractTableRows(html) {\n  const sectionMarker =\n    /Grille des taux par d.{1,10}faut applicables aux contribuables domicili.{1,5}s en m.{1,5}tropole/i;\n  const markerIndex = html.search(sectionMarker);\n  if (markerIndex === -1)\n    throw new Error(\n      \"Target section not found — page structure may have changed.\",\n    );\n  const relevantHtml = html.slice(markerIndex);\n  const tableMatch = relevantHtml.match(/<table[\\s\\S]*?<\\/table>/i);\n  if (!tableMatch) throw new Error(\"No table found after target section.\");\n  return [...tableMatch[0].matchAll(/<tr[\\s\\S]*?<\\/tr>/gi)].map((m) => m[0]);\n}\n\nfunction parseRangeText(text) {\n  const parseAmt = (s) => parseFloat(s.replace(/[\\s\\u00A0]/g, '').replace(',', '.'));\n  const supMatch = text.match(/sup.{1,10}rieure\\s+ou\\s+.{1,5}gale\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  const infMatch = text.match(/inf.{1,5}rieure\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  return {\n    min: supMatch ? parseAmt(supMatch[1]) : 0,\n    max: infMatch ? parseAmt(infMatch[1]) : null,\n  };\n}\n\nfunction parseRows(rows) {\n  const grid = [];\n  for (const rowHtml of rows) {\n    const cellMatches = [...rowHtml.matchAll(/<t[dh][\\s\\S]*?<\\/t[dh]>/gi)];\n    if (cellMatches.length < 2) continue;\n    const cells = cellMatches.map((m) => stripTags(m[0]));\n    const rate = parseFrenchNumber(cells[1]);\n    if (rate === null) continue;\n    const { min, max } = parseRangeText(cells[0]);\n    grid.push({ min, max, rate: rate / 100 });\n  }\n  return grid;\n}\n\n/* -------------------------------------------------------------------------- */\n/*  Main                                                                       */\n/* -------------------------------------------------------------------------- */\n\nconst BOFIP_URL =\n  \"https://bofip.impots.gouv.fr/bofip/11255-PGP.html/identifiant%3DBOI-BAREME-000037-20250410\";\n\nconst html = await fetchHtml(BOFIP_URL);\nconsole.log(\"HTML length:\", html.length);\nconsole.log(\"HTML snippet (first 500):\", html.slice(0, 500));\n\nconst rows = extractTableRows(html);\nconsole.log(\"Row count:\", rows.length);\nrows.forEach((r, i) => console.log(`Row ${i}:`, r));\n\nconst taxGrid = parseRows(rows);\nconsole.log(\"Parsed grid:\", JSON.stringify(taxGrid));\n\nif (taxGrid.length === 0) {\n  throw new Error(\"Parsed tax grid is empty — check BOFIP page structure.\");\n}\n\nreturn [{ json: { taxGrid, scrapedAt: new Date().toISOString() } }];\n"
+        "jsCode": "/**\n * Task 1 — n8n Code Node: Tax Grid Scraper\n *\n * Paste this into an n8n \"Code\" node (mode: \"Run Once for All Items\").\n * No external npm packages needed — uses only Node built-ins.\n *\n * Output:\n *   items[0].json.taxGrid — Array<{ min, max, rate }>\n *\n * https://docs.n8n.io\n */\n\n/* -------------------------------------------------------------------------- */\n/*  Helpers (copied from scrape-tax-grid.js for self-contained n8n use)       */\n/* -------------------------------------------------------------------------- */\n\nasync function fetchHtml(url) {\n  return helpers.httpRequest({\n    method: \"GET\",\n    url,\n    headers: { \"User-Agent\": \"Mozilla/5.0\" },\n    returnFullResponse: false,\n  });\n}\n\nfunction parseFrenchNumber(raw) {\n  if (!raw) return null;\n  const cleaned = raw\n    .replace(/\\u00A0/g, \"\")\n    .replace(/\\s/g, \"\")\n    .replace(\",\", \".\")\n    .replace(\"%\", \"\")\n    .trim();\n  const value = parseFloat(cleaned);\n  return isNaN(value) ? null : value;\n}\n\nfunction stripTags(html) {\n  return html\n    .replace(/<[^>]+>/g, \" \")\n    .replace(/&nbsp;/g, \"\\u00A0\")\n    .replace(/&amp;/g, \"&\")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction extractTableRows(html) {\n  const sectionMarker =\n    /Grille des taux par d.{1,10}faut applicables aux contribuables domicili.{1,5}s en m.{1,5}tropole/i;\n  const markerIndex = html.search(sectionMarker);\n  if (markerIndex === -1)\n    throw new Error(\n      \"Target section not found — page structure may have changed.\",\n    );\n  const relevantHtml = html.slice(markerIndex);\n  const tableMatch = relevantHtml.match(/<table[\\s\\S]*?<\\/table>/i);\n  if (!tableMatch) throw new Error(\"No table found after target section.\");\n  return [...tableMatch[0].matchAll(/<tr[\\s\\S]*?<\\/tr>/gi)].map((m) => m[0]);\n}\n\nfunction parseRangeText(text) {\n  const parseAmt = (s) => parseFloat(s.replace(/[\\s\\u00A0]/g, '').replace(',', '.'));\n  const supMatch = text.match(/sup.{1,10}rieure\\s+ou\\s+.{1,5}gale\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  const infMatch = text.match(/inf.{1,5}rieure\\s+[àa]\\s+([\\d\\s\\u00A0]+)\\s*euros/i);\n  return {\n    min: supMatch ? parseAmt(supMatch[1]) : 0,\n    max: infMatch ? parseAmt(infMatch[1]) : null,\n  };\n}\n\nfunction parseRows(rows) {\n  const grid = [];\n  for (const rowHtml of rows) {\n    const cellMatches = [...rowHtml.matchAll(/<t[dh][\\s\\S]*?<\\/t[dh]>/gi)];\n    if (cellMatches.length < 2) continue;\n    const cells = cellMatches.map((m) => stripTags(m[0]));\n    const rate = parseFrenchNumber(cells[1]);\n    if (rate === null) continue;\n    const { min, max } = parseRangeText(cells[0]);\n    grid.push({ min, max, rate: rate / 100 });\n  }\n  return grid;\n}\n\n/* -------------------------------------------------------------------------- */\n/*  Main                                                                       */\n/* -------------------------------------------------------------------------- */\n\nconst BOFIP_URL =\n  \"https://bofip.impots.gouv.fr/bofip/11255-PGP.html/identifiant%3DBOI-BAREME-000037-20250410\";\n\nconst html = await fetchHtml(BOFIP_URL);\nconst rows = extractTableRows(html);\nconst taxGrid = parseRows(rows);\n\nif (taxGrid.length === 0) {\n  throw new Error(\"Parsed tax grid is empty — check BOFIP page structure.\");\n}\n\nconst netImposable = items[0].json.netImposable ?? null;\nreturn [{ json: { taxGrid, scrapedAt: new Date().toISOString(), netImposable } }];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        0,
-        128
+        -16,
+        -160
       ],
       "id": "b8cc3431-e04d-4863-ac1a-56623f46d151",
       "name": "Tax Web scraper"
@@ -21,8 +21,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        448,
-        128
+        208,
+        -160
       ],
       "id": "6e2da11e-31b4-4b31-b269-e2354161528d",
       "name": "Rate comparator"
@@ -55,35 +55,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        672,
-        128
+        432,
+        -160
       ],
       "id": "4db58f04-a3d1-43f3-ac79-911348b935a1",
       "name": "If"
-    },
-    {
-      "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "7023aed4-ca2d-4fc1-a822-8130d6d8edc7",
-              "name": "netImposable",
-              "value": 3500,
-              "type": "number"
-            }
-          ]
-        },
-        "includeOtherFields": true,
-        "options": {}
-      },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [
-        224,
-        128
-      ],
-      "id": "830c3862-0de3-4d4a-90c8-e681fc7ddea7",
-      "name": "Net imposable"
     },
     {
       "parameters": {
@@ -92,8 +68,8 @@
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [
-        896,
-        128
+        656,
+        -160
       ],
       "id": "224557c0-4f59-45cc-b3d1-f68fab4148ad",
       "name": "Execute Command"
@@ -103,21 +79,20 @@
         "pollTimes": {
           "item": [
             {
-              "mode": "everyMinute"
+              "mode": "everyMonth",
+              "hour": 0
             }
           ]
         },
-        "simple": false,
         "filters": {
-          "q": ""
-        },
-        "options": {}
+          "q": "from:@uncove.com subject:\"Bulletin de paie\""
+        }
       },
       "type": "n8n-nodes-base.gmailTrigger",
       "typeVersion": 1.3,
       "position": [
-        0,
-        -96
+        -896,
+        -160
       ],
       "id": "ee3713e5-5245-4ee2-8269-97b945e2126a",
       "name": "Gmail Trigger",
@@ -128,6 +103,59 @@
           "name": "Gmail account"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "attachment_0",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -448,
+        -160
+      ],
+      "id": "275ba6f5-edd5-4087-b689-c934a3bb7b8f",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "messageId": "={{ $json.id }}",
+        "simple": false,
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -672,
+        -160
+      ],
+      "id": "faed65d9-f2c9-44fb-ac31-b61b911d34fa",
+      "name": "Get a message",
+      "webhookId": "36c0b3fc-c64e-4703-aff6-35457d74c39d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "zH93ycfx8msPYsns",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Task 0b — n8n Code Node: Parse NET IMPOSABLE from PDF text\n *\n * Paste into a Code node (mode: \"Run Once for All Items\") after the Extract from File node.\n *\n * Input:  items[0].json.text — raw text extracted from the payslip PDF\n * Output: { netImposable: number }\n *\n * ⚠️ The regex may need tuning depending on the exact PDF format.\n *    Check the log output on first run to see the raw text.\n */\n\nconst text = items[0].json.text ?? '';\n\n// Log a snippet to help debug if regex fails\nconsole.log('PDF text (first 1000 chars):', text.slice(0, 1000));\n\n// Target: \"Impôt sur le revenu prélevé à la source <BASE> <taux> <montant>\"\n// The base (first number after the label) is the monthly net imposable for PAS\nconst match = text.match(/Imp.{1,5}t sur le revenu pr.{1,10}lev.{1,5}\\s+[àa]\\s+la source\\s+([\\d\\s\\u00A0]+[,]\\d+)/i);\n\nif (!match) {\n  throw new Error('PAS base (Impôt sur le revenu prélevé à la source) not found in PDF. Check console log above for raw text.');\n}\n\nconst raw = match[1].replace(/[\\s\\u00A0]/g, '').replace(',', '.');\nconst netImposable = parseFloat(raw);\n\nif (isNaN(netImposable)) {\n  throw new Error(`Failed to parse net imposable value from: \"${match[1]}\"`);\n}\n\nconsole.log('Parsed netImposable:', netImposable);\n\nreturn [{ json: { netImposable } }];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        -160
+      ],
+      "id": "7b554dd4-fcb2-4380-b5fe-32269a25aecf",
+      "name": "PDF Parser"
     }
   ],
   "pinData": {},
@@ -136,7 +164,7 @@
       "main": [
         [
           {
-            "node": "Net imposable",
+            "node": "Rate comparator",
             "type": "main",
             "index": 0
           }
@@ -154,22 +182,55 @@
         ]
       ]
     },
-    "Net imposable": {
+    "If": {
       "main": [
         [
           {
-            "node": "Rate comparator",
+            "node": "Execute Command",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "If": {
+    "Gmail Trigger": {
       "main": [
         [
           {
-            "node": "Execute Command",
+            "node": "Get a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a message": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "PDF Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF Parser": {
+      "main": [
+        [
+          {
+            "node": "Tax Web scraper",
             "type": "main",
             "index": 0
           }
@@ -183,7 +244,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "5c0a24e8-fde0-47bc-a9a5-f0d04b61536a",
+  "versionId": "3d768fd8-65d1-4487-be7d-4024ddcf5e00",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "3da45d935305363c69b0b58031db83a74859b55142b9080d4cb236f6969874a3"
