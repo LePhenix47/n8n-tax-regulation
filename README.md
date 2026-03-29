@@ -86,9 +86,13 @@ $env:NODES_EXCLUDE="[]"; npx n8n start
 
 Then open [http://localhost:5678](http://localhost:5678).
 
-### 4. Import the workflow
+### 4. Disable uBlock Origin (or any ad blocker) for localhost
 
-In n8n: top-right menu → Import → select `My workflow.json`.
+The Google OAuth popup that n8n opens (`accounts.google.com`) gets silently blocked by uBlock Origin, making the "Sign in with Google" button appear to do nothing. Disable your ad blocker for `localhost:5678` before attempting to connect.
+
+### 5. Import the workflow
+
+In n8n: top-right hamburger menu (top right) → Import from file → select `My workflow.json`.
 
 ---
 
