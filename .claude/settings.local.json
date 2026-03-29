@@ -17,7 +17,8 @@
       "Bash(cmd.exe /c \"taskkill /PID 21700 /F\")",
       "Bash(kill -9 21700)",
       "Bash(taskkill //PID 21700 //F)",
-      "Bash(NODES_EXCLUDE=\"[]\" npm run start:n8n)"
+      "Bash(NODES_EXCLUDE=\"[]\" npm run start:n8n)",
+      "WebFetch(domain:community.n8n.io)"
     ]
   }
 }
